@@ -1,0 +1,1 @@
+This repository provides the code used to develop ML-based classifying models based on MIMIC-IV-ED and MIMIC-IV databases and Emergency Severity Index triage system. Moreover, the code encompasses the data analysis part that was performed as part of this project.
