@@ -1,0 +1,210 @@
+#Merging datasets & extracting length of stay:
+mergedset <- merge(triage, patients, by = ("subject_id"))
+triage4 <- merge(mergedset, edstays, by = c("subject_id", "stay_id"))
+triage3 <- triage4[,c(1:15,18:19,21:23)]
+intime <- as.POSIXct(triage3$intime, format = "%Y/%m/%d %H:%M:%S")
+outtime <- as.POSIXct(triage3$outtime, format = "%Y/%m/%d %H:%M:%S")
+library(data.table)
+intime <- as.data.table(intime) 
+outtime <- as.data.table(outtime)
+inyear <- format(intime, format = "%Y")
+triage3 <- cbind(triage3, inyear)
+names(triage3)[21] <- "in_Year"
+names(triage3)[12] <- "gender"
+triage3$in_Year <- as.numeric(triage3$in_Year)
+triage3$age <- triage3$in_Year - triage3$anchor_year + triage3$anchor_age
+triage3$length_of_stay <- as.numeric(triage3$outtime - triage3$intime)
+triage3$length_of_stay <- (triage3$length_of_stay/3600)
+triage3$length_of_stay <- round(triage3$length_of_stay, digits = 2)
+
+#For checking the complete cases:
+triage3_comp <- triage3[complete.cases(triage3), ]
+
+#Corrologram Plot + statistical significance:
+library(corrgram)
+triage3_corr <- triage3[,-c(17,20,23)]
+triage3_corr$acuity <- as.numeric(triage3_corr$acuity)
+triage3_corr$pain <- as.numeric(triage3_corr$pain)
+corrgram(triage3_corr, order = TRUE, lower.panel = panel.shade, upper.panel = panel.pie)
+triage3_numeric <- triage3_corr[,c(1:10,13:14,19:20)]
+library(psych)
+corr.test(triage3_numeric, use = "complete")
+
+triage2 <- triage3[ ,c(1:12,18:23)]
+triage2$chiefcomplaint <- as.factor(triage2$chiefcomplaint)
+triage2$gender <- as.factor(triage2$gender)
+triage2$race <- as.factor(triage2$race)
+triage2$pain <- as.numeric(triage2$pain)
+triage2 <- na.omit(triage2)
+colnames(triage2)[11] <- "complaints"
+triage2 <- triage2[,-c(1:2)]
+triage2 <- triage2[,c(1:8,14,15,9:13,16)]
+
+
+#For Subgroups Analysis
+triage5 <- subset(triage3, disposition=="LEFT WITHOUT BEING SEEN")
+triage6 <- subset(triage3, disposition=="ELOPED")
+triage7 <- subset(triage3, disposition=="LEFT AGAINST MEDICAL ADVICE")
+triage8 <- subset(triage3, disposition=="HOME")
+triage9 <- subset(triage8, acuity == 3 | acuity == 4 | acuity == 5)
+triage2_white <- subset(triage2, race=="White")
+triage3_levelone <- subset(triage3, acuity=="1")
+triage3_females <- subset(triage3, gender=="F")
+triage3_males <- subset(triage3, gender=="M")
+triage3_classfive <- subset(triage3, acuity == 5)
+los_out <- as.data.table(boxplot.stats(triage9$length_of_stay)$out)
+triage9 <- triage9[triage9$length_of_stay < 12.85 & triage9$length_of_stay > 0, ]
+triage5$chiefcomplaint <- droplevels(triage5$chiefcomplaint)
+triage6$chiefcomplaint <- droplevels(triage6$chiefcomplaint)
+triage7$chiefcomplaint <- droplevels(triage7$chiefcomplaint)
+triage5_factors <- as.data.table(table(triage5$chiefcomplaint))
+triage6_factors <- as.data.table(table(triage6$chiefcomplaint))
+triage7_factors <- as.data.table(table(triage7$chiefcomplaint))
+triage8_factors <- as.data.table(table(triage8$chiefcomplaint))
+
+#Categorizing key complaints & race
+library(forcats)
+triage2$complaints <- fct_collapse(triage2$complaints, Chest_pain = c("Chest pain","CHEST PAIN", "Chest pain, Dyspnea"), Dyspnea = c("DYSPNEA", "Dyspnea") ,Back_pain = c("Lower back pain","Back pain","BACK PAIN"), ETOH = c("ETOH", "ETOH, Unable to ambulate" ), Headache = c("HEADACHE", "Headache") , Abdominal_pain = c("Abd pain","Abd pain, n/v/d", "Epigastric pain", "RUQ abdominal pain", "LLQ abdominal pain", "ABD PAIN", "Abd pain, N/V", "ABDOMINAL PAIN", "RLQ abdominal pain", "Abd pain, Transfer"), Status_post_fall = c("s/p Fall","S/P FALL"))
+triage2$race <- fct_collapse(triage2$race, White = c("WHITE","WHITE - OTHER EUROPEAN", "WHITE - RUSSIAN", "PORTUGUESE", "WHITE - BRAZILIAN", "WHITE - EASTERN EUROPEAN"), Black = c("BLACK/AFRICAN AMERICAN", "BLACK/CAPE VERDEAN", "BLACK/AFRICAN", "BLACK/CARIBBEAN ISLAND"), Hispanic = c("HISPANIC/LATINO - PUERTO RICAN","HISPANIC/LATINO - DOMINICAN","HISPANIC OR LATINO", "HISPANIC/LATINO - GUATEMALAN", "HISPANIC/LATINO - SALVADORAN", "HISPANIC/LATINO - COLUMBIAN", "HISPANIC/LATINO - MEXICAN", "SOUTH AMERICAN", "HISPANIC/LATINO - HONDURAN", "HISPANIC/LATINO - CUBAN", "HISPANIC/LATINO - SALVADORAN", "HISPANIC/LATINO - CENTRAL AMERICAN"), Asian = c("ASIAN", "ASIAN - CHINESE", "ASIAN - ASIAN INDIAN", "ASIAN - SOUTH EAST ASIAN", "ASIAN - KOREAN"), American_Indian = c("AMERICAN INDIAN/ALASKA NATIVE"), Native_Hawaiian = c("NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"))                                                                                                                                                                                                                                                                       
+
+triage2 <- triage2[triage2$complaints == "Chest_pain" | triage2$complaints == "Abdominal_pain" | triage2$complaints == "Dyspnea" | triage2$complaints == "SI" | triage2$complaints == "Status_post_fall" | triage2$complaints == "ETOH" | triage2$complaints == "Wound eval" | triage2$complaints == "Headache" | triage2$complaints == "Back_pain" | triage2$complaints == "N/V", ]
+triage2 <- triage2[triage2$race == "White" | triage2$race == "Black" | triage2$race == "Hispanic" | triage2$race == "Asian" | triage2$race == "American_Indian" | triage2$race == "Native_Hawaiian", ]
+triage2$complaints <- droplevels(triage2$complaints)
+triage2$race <- droplevels(triage2$race)
+
+
+#Tables & plots codes
+table(triage2$race, triage2$acuity)
+table(triage2$complaints, triage2$acuity)
+table(triage2$gender, triage2$acuity)
+table(triage2$arrival_transport, triage2$acuity)
+
+#Plots
+library(ggplot2)
+triage3$acuity <- as.factor(triage3$acuity)
+triage3$pain <- as.numeric(triage3$pain)
+ggplot(triage3, aes(x = disposition, y = age)) + geom_boxplot(fill = 'steelblue')+ coord_flip()
+ggplot(triage3, aes(x = acuity, y = age)) + geom_boxplot(fill = 'steelblue') + xlab("Acuity") + ylab("Age")
+ggplot(triage3, aes(x = acuity, y = heartrate)) + geom_boxplot(fill = 'steelblue') + xlab("Acuity") + ylab("Heart Rate")
+ggplot(triage3, aes(x = gender,fill = acuity)) + geom_bar(position = "dodge") + xlab("Gender") + ylab("Count") + labs(fill="Acuity")
+options(scipen = 999)
+ggplot(triage3, aes(x = acuity, y = pain)) + geom_boxplot(fill = 'steelblue') + xlab("Acuity") + ylab("Pain")
+ggplot(triage3, aes(x = age,fill = disposition)) + geom_boxplot() + xlab("Age") + labs(fill="Disposition")
+ggplot(triage2, aes(x = race,fill = acuity)) + geom_bar(position = "stack") + xlab("Race") + ylab("Count") + labs(fill="Acuity")
+ggplot(triage2, aes(x = complaints,fill = acuity)) + geom_bar(position = "stack") + xlab("Complaint") + ylab("Count") + labs(fill="Acuity")
+ggplot(triage3, aes(x = arrival_transport,fill = acuity)) + geom_bar(position = "stack") + xlab("Arrival Transport Mean") + ylab("Count") + labs(fill="Acuity")
+ggplot(triage7, aes(x = arrival_transport,fill = acuity)) + geom_bar(position = "stack") + xlab("Arrival Transport Mean") + ylab("Count")+ labs(fill="Acuity")
+ggplot(triage6, aes(x = arrival_transport,fill = acuity)) + geom_bar(position = "stack") + xlab("Arrival Transport Mean") + ylab("Count") + labs(fill="Acuity")
+ggplot(triage5, aes(x = arrival_transport,fill = acuity)) + geom_bar(position = "stack") + xlab("Arrival Transport Mean") + ylab("Count") + labs(fill="Acuity")
+
+
+#Finding top chief complaints in anomaly subgroups:
+names(which.max(table(triage6$chiefcomplaint)))
+names(which.max(table(triage5$chiefcomplaint)))
+names(which.max(table(triage7$chiefcomplaint)))
+
+
+#for finding the outliers:
+tempout <- as.data.table(boxplot.stats(triage2$temperature)$out)
+hrateout <- as.data.table(boxplot.stats(triage2$heartrate)$out)
+resprateout <- as.data.table(boxplot.stats(triage2$resprate)$out)
+o2satout <- as.data.table(boxplot.stats(triage2$o2sat)$out)
+sbpout <- as.data.table(boxplot.stats(triage2$sbp)$out)
+dbpout <- as.data.table(boxplot.stats(triage2$dbp)$out)
+painout <- as.data.table(boxplot.stats(triage2$pain)$out)
+ageout <- as.data.table(boxplot.stats(triage2$age)$out)
+inyearout <- as.data.table(boxplot.stats(triage2$in_Year)$out)
+
+#to filter out the outliers:
+triage2 <- triage2[triage2$temperature < 100.01 & triage2$temperature > 95.9, ]
+triage2 <- triage2[triage2$heartrate < 130 & triage2$heartrate > 37, ]
+triage2 <- triage2[triage2$resprate < 22 & triage2$resprate > 12, ]
+triage2 <- triage2[triage2$o2sat < 110 & triage2$o2sat > 92, ]
+triage2 <- triage2[triage2$sbp < 192 & triage2$sbp > 78, ]
+triage2 <- triage2[triage2$dbp < 117 & triage2$dbp > 40, ]
+triage2 <- triage2[triage2$pain < 25, ]
+triage2$pain[triage2$pain > 10] <- 10
+
+#Deletion of Disposition & Length of Stay columns:
+triage2 <- triage2[,-16]
+triage2 <- triage2[,-15]
+
+
+triage2 <- triage2[,c(1:7,9:10,8,11:14)]
+triage2 <- triage2[,c(1:7,9,8,10:14)]
+triage2$in_Year <- as.character(triage2$in_Year)
+triage2$in_Year <- as.factor(triage2$in_Year)
+triage2$in_Year <- droplevels(triage2$in_Year)
+
+#scaling and centering for RF, NB & SGB Models:
+scaledtriage2 <- scale(triage2[,1:8])
+library(data.table)
+scaledtriage2 <- as.data.table(scaledtriage2)
+triage2 <- cbind(scaledtriage2, triage2[,9:14])
+remove(scaledtriage2)
+
+#scaling and centering for CART & MLP Models:
+scaledtriage2 <- scale(triage2[,1:8])
+library(data.table)
+scaledtriage2 <- as.data.table(scaledtriage2)
+triage2 <- cbind(scaledtriage2, triage2[,9:14])
+remove(scaledtriage2)
+
+#code for dummy variables for MLP & CART Models
+library(fastDummies) 
+triage2 <- dummy_cols(triage2, select_columns = "complaints") 
+triage2 <- dummy_cols(triage2, select_columns = "race")
+triage2 <- dummy_cols(triage2, select_columns = "gender")
+triage2 <- dummy_cols(triage2, select_columns = "arrival_transport")
+triage2 <- dummy_cols(triage2, select_columns = "in_Year")
+triage2 <- triage2[,-c(9,11:14)]
+
+#Models Development:
+library(caret)
+set.seed(12345)
+index <- createDataPartition(triage2$acuity, p = 0.8, list = FALSE)
+trainData <- triage2[index, ]
+validationData <- triage2[-index, ]
+
+#For RF, SGB & NB models:
+DataTrain <- trainData[,-10]
+DataValidation <- validationData[,-10]
+
+#For MLP & CART models:
+DataTrain <- trainData[,-9]
+DataValidation <- validationData[,-9]
+
+set.seed(1234)
+
+CARTModel <- train(x = DataTrain, y = trainData$acuity, method = "rpart", metric = "Accuracy", trControl = trainControl(method = "cv", number = 5))
+RFModel <- train(x = DataTrain, y = trainData$acuity, method = "ranger", metric = "Accuracy", trControl = trainControl(method = "cv", number = 5))
+NBModel <- train(x = DataTrain, y = trainData$acuity, method = "nb", metric = "Accuracy", trControl = trainControl(method = "cv", number = 5))
+SGBModel <- train(x = DataTrain, y = trainData$acuity, method = "gbm", metric = "Accuracy", trControl = trainControl(method = "cv", number = 5))
+MLPModel <- train(x = DataTrain, y = trainData$acuity, method = "mlpML", metric = "Accuracy", trControl = trainControl(method = "cv", number = 5))
+
+#Testing the models and obtaining confusion matrix:
+predictonTestsgb <- predict(SGBModel, newdata = DataValidation)
+confusionMatrix(predictonTestsgb, validationData$acuity)
+predictonTestrf <- predict(RFModel, newdata = DataValidation)
+confusionMatrix(predictonTestrf, validationData$acuity)
+predictOnTestmlp <- predict(MLPModel, newdata = DataValidation)
+confusionMatrix(predictOnTestmlp, validationData$acuity)
+predictonTestCART <- predict(CARTModel, newdata = DataValidation)
+confusionMatrix(predictonTestCART, validationData$acuity)
+predictonTestnb <- predict(NBModel, newdata = DataValidation)
+confusionMatrix(predictonTestnb, validationData$acuity)
+
+#Variables Importance:
+library(gbm)
+varImp(SGBModel)
+
+#Plot of Confusion Matrix for SGB Model:
+conf_matsgb <- as.data.table(table(predictonTestsgb, validationData$acuity))
+colnames(conf_matsgb)[3] <- "Freq"
+colnames(conf_matsgb)[2] <- "Actual"
+colnames(conf_matsgb)[1] <- "Predicted"
+conf_matsgb$Actual <- as.factor(conf_matsgb$Actual)
+conf_matsgb$Predicted <- as.factor(conf_matsgb$Predicted)
+conf_matsgb$Predicted <- factor(conf_matsgb$Predicted, levels=rev(levels(conf_matsgb$Predicted)))
+ggplot(conf_matsgb, aes(x= Actual, y= Predicted, fill = Freq)) + geom_tile() + geom_text(aes(label=Freq)) +
+  scale_fill_gradient(low="white", high="#009194") + labs(x = "Actual Class",y = "Predicted Class") + scale_x_discrete(labels=c("Level 1","Level 2","Level 3","Level 4","Level 5")) +  scale_y_discrete(labels=c ("Level 5", "Level 4", "Level3", "Level 2", "Level 1"))
